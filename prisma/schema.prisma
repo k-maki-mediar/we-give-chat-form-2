@@ -27,13 +27,18 @@ enum MembershipType {
   MEMBER
 }
 
-// Beneficiary 用ステータス Enum を追加
 enum BeneficiaryStatus {
   REGISTRATION  // 登録してまだ審査中など、公開前
   AVAILABLE     // 寄付受付中
   INACTIVE      // 一時的に受付停止など
   COMPLETED     // 必要な寄付が集まり、受付終了
   CANCELED      // 途中キャンセル
+}
+
+enum ExecutionType {
+  DETERMINISTIC
+  AI
+  API_CALL
 }
 
 // =========================================
@@ -509,6 +514,7 @@ model Chat {
   donationRequest DonationRequest?
   chatContext ChatContext?
   chatSession ChatSession?
+  chatFlowState ChatFlowState?
 }
 
 // チャットメッセージ
@@ -570,6 +576,52 @@ model ChatFormConfig {
 
   // Relations
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model ChatFlowState {
+  id               String             @id @default(uuid())
+  chatId           String             @unique
+  organizationId   Int
+  currentStepId    String
+  stepHistory      Json               @default("[]")
+  userResponses    Json               @default("{}")
+  contextData      Json               @default("{}")
+  authState        Json?
+  donorInfo        Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  chat             Chat               @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  StepExecutionLog StepExecutionLog[]
+
+  @@map("ChatFlowState")
+}
+
+model FlowDefinition {
+  id             String   @id @default(uuid())
+  organizationId Int
+  version        String
+  definition     Json
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, version])
+  @@map("FlowDefinition")
+}
+
+model StepExecutionLog {
+  id               String        @id @default(uuid())
+  flowStateId      String
+  stepId           String
+  executionType    ExecutionType
+  processingTimeMs Int?
+  inputData        Json?
+  outputData       Json?
+  errorData        Json?
+  createdAt        DateTime      @default(now())
+  flowState        ChatFlowState @relation(fields: [flowStateId], references: [id], onDelete: Cascade)
+
+  @@map("StepExecutionLog")
 }
 
 // =========================================
