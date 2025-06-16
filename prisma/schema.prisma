@@ -1,0 +1,674 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================
+// enum
+// =========================================
+enum PaymentStatus {
+  PENDING
+  PAID
+  ALLOCATED
+  TRANSFERRED
+  CANCELED
+  REFUND
+  FAILED_INCOME
+  FAILED_OUTCOME
+}
+
+enum MembershipType {
+  GUEST
+  MEMBER
+}
+
+// Beneficiary 用ステータス Enum を追加
+enum BeneficiaryStatus {
+  REGISTRATION  // 登録してまだ審査中など、公開前
+  AVAILABLE     // 寄付受付中
+  INACTIVE      // 一時的に受付停止など
+  COMPLETED     // 必要な寄付が集まり、受付終了
+  CANCELED      // 途中キャンセル
+}
+
+// =========================================
+// 1. users
+// =========================================
+model User {
+  id            Int      @id @default(autoincrement())
+  name          String?
+  email         String   @unique
+  passwordHash  String?
+  lineUserId    String?
+  lineConnected Boolean  @default(false)
+  userType      String
+
+  // 追加: ユーザーごとのアバターURL
+  avatarUrl     String?
+
+  // 追加フィールド
+  anonymousId        String?   @unique
+  lastLoginAt        DateTime?
+  preferredLanguage  String?   @default("ja")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // NextAuth relations
+  accounts           Account[]
+  sessions           Session[]
+  organizationMember OrganizationMember?
+
+  // 追加リレーション
+  chats             Chat[]
+
+  // 一対多の関係に変更（一人のユーザーが複数のDonorレコードを持てる）
+  donors            Donor[]
+  auditLogs         AuditLog[]
+  tempTokens        TempTokenStore[]
+}
+
+// =========================================
+// 2. organizations
+// =========================================
+model Organization {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  minimumIndirectCost Decimal  @default(0.0)
+  indirectCostRatio   Decimal  @default(0.0)
+  currentIndirectCost Decimal  @default(0.0)
+  orgPreferenceType   String?
+  acceptanceStatus    Boolean  @default(false)
+
+  indirectCostUsage     String?
+  highDonationThreshold Decimal? @default(100000.0)
+  isManualHighDonation  Boolean? @default(false)
+
+  embedScript         String?   @db.Text
+  code                String?   @db.VarChar(50)
+  orgType             String?   @db.VarChar(50)
+  corporateNumber     String?   @db.VarChar(20)
+  contactPersonName   String?
+  contactPersonEmail  String?   @db.VarChar(255)
+  contactPhoneNumber  String?   @db.VarChar(20)
+  address             String?   @db.VarChar(255)
+
+  // 新規追加: 受益主体への寄付受付可否
+  isBeneficiaryFundingOpen Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  organizationMembers OrganizationMember[]
+  donationRequests    DonationRequest[]
+  beneficiaries       Beneficiary[]
+  bankAccounts        BankAccount[]
+  notifications       Notification[]
+  organizationFinances OrganizationFinance[]
+  chatFormConfigs     ChatFormConfig[]
+}
+
+// =========================================
+// 2.2. organizations_finance
+// =========================================
+model OrganizationFinance {
+  id                    Int      @id @default(autoincrement())
+  organizationId        Int
+  totalIncomeAmount     Decimal  @db.Decimal(15, 2) @default(0)
+  donationIncomeAmount  Decimal  @db.Decimal(15, 2) @default(0)
+  subsidyIncomeAmount   Decimal  @db.Decimal(15, 2) @default(0)
+  businessIncomeAmount  Decimal  @db.Decimal(15, 2) @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// =========================================
+// 3. organization_members
+// =========================================
+model OrganizationMember {
+  id             Int     @id @default(autoincrement())
+  organizationId Int
+  userId         Int     @unique
+  role           String?
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// =========================================
+// 4. donors
+// =========================================
+model Donor {
+  id        Int     @id @default(autoincrement())
+
+  userId    Int?
+  name      String
+  donorType String  @default("INDIVIDUAL")
+
+  birthdate DateTime?
+  gender    String?
+  zipcode   String?
+
+  phone     String?
+  address   String?
+
+  email     String?
+
+  totalDonationAmount Decimal @default(0.0)
+  donationCount       Int     @default(0)
+
+  // 追加カラム (法人対応など)
+  contactPersonName  String?      // 担当者名
+  contactPersonTitle String?      // 部署・肩書き
+  isNamePublished    Boolean @default(false) // 広報物への氏名掲載フラグ
+  hasAltMailAddress  Boolean @default(false) // 郵便物を別送付先へも送るか？
+  altMailZipcode     String?      // 別送付先の郵便番号
+  altMailAddress     String?      // 別送付先住所
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  user             User?             @relation(fields: [userId], references: [id])
+  donationRequests DonationRequest[]
+}
+
+// =========================================
+// 5. beneficiaries
+// =========================================
+model Beneficiary {
+  id              Int               @id @default(autoincrement())
+  organizationId  Int
+  beneficiaryType String
+  name            String
+  status          BeneficiaryStatus @default(REGISTRATION)
+  isInStock       Boolean           @default(false)
+  priority        Int               @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  organization              Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  donationDetails           DonationDetail[]
+  bankAccountBeneficiaries  BankAccountBeneficiary[]
+  beneficiaryPersonDetails  BeneficiaryPersonDetails?
+  beneficiaryProjectDetails BeneficiaryProjectDetails?
+  transfers                 Transfer[] @relation("beneficiary_transfers")
+  remittanceBankAccounts    BeneficiaryRemittanceBankAccount[]
+}
+
+model BeneficiaryPersonDetails {
+  beneficiaryId Int   @id
+  dateOfBirth   DateTime?
+  phone         String?
+  address       String?
+  etc           String?
+
+  targetDonationAmount Decimal? @default(0.0)
+  contactEmail         String?  @db.VarChar(255)
+  contactPhone         String?  @db.VarChar(20)
+
+  // 追加: 個人用画像
+  imageUrl      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relation
+  beneficiary Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+}
+
+model BeneficiaryProjectDetails {
+  beneficiaryId Int   @id
+  managerName   String?
+  managerEmail  String?
+  overview      String?
+  startDate     DateTime?
+  endDate       DateTime?
+
+  targetDonationAmount Decimal? @default(0.0)
+  contactEmail         String?  @db.VarChar(255)
+  contactPhone         String?  @db.VarChar(20)
+
+  // 追加: プロジェクト用画像
+  imageUrl      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relation
+  beneficiary Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+}
+
+model BeneficiaryRemittanceBankAccount {
+  id             Int      @id @default(autoincrement())
+  beneficiaryId  Int
+  bankName       String
+  branchName     String?
+  branchCode     String?
+  accountType    String?
+  accountNumber  String
+  accountHolder  String
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      Int?
+  updatedBy      Int?
+  isDeleted      Boolean   @default(false)
+  deletedAt      DateTime?
+  deletedBy      Int?
+
+  // Relations
+  beneficiary Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+}
+
+// =========================================
+// 6. donation_requests
+// =========================================
+model DonationRequest {
+  id             Int     @id @default(autoincrement())
+  donorId        Int
+  organizationId Int
+  donationDate   DateTime
+  totalAmount    Decimal
+  paymentMethod  String?
+  status         PaymentStatus @default(PENDING)
+  purposeType    String?
+  isHighDonation Boolean  @default(false)
+  membershipType MembershipType @default(GUEST)
+
+  // 追加フィールド
+  chatId              String?  @unique
+  isAllocationEdited  Boolean  @default(false)  // 振り分け先編集フラグ
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  donor        Donor        @relation(fields: [donorId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  donationDetails DonationDetail[]
+  transfers       Transfer[]
+  chat            Chat?      @relation(fields: [chatId], references: [id])
+}
+
+// =========================================
+// 7. donation_details
+// =========================================
+model DonationDetail {
+  id                Int     @id @default(autoincrement())
+  donationRequestId Int
+  // usagePhase を削除しました
+  usageType         String
+  beneficiaryId     Int?
+
+  amount Decimal
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  donationRequest DonationRequest @relation(fields: [donationRequestId], references: [id], onDelete: Cascade)
+  beneficiary     Beneficiary?    @relation(fields: [beneficiaryId], references: [id], onDelete: SetNull)
+}
+
+// =========================================
+// 8. bank_accounts
+// =========================================
+model BankAccount {
+  id                 Int     @id @default(autoincrement())
+  organizationId     Int
+  bankName           String
+  accountNumber      String
+  accountHolder      String
+  useForIndirectCost Boolean @default(false)
+
+  branchName  String?
+  branchCode  String?
+  accountType String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankAccountBeneficiaries BankAccountBeneficiary[]
+  transfers    Transfer[]   @relation("bank_account_transfers")
+}
+
+// 追加: 中間テーブル
+model BankAccountBeneficiary {
+  bankAccountId  Int
+  beneficiaryId  Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      Int?
+  updatedBy      Int?
+  isDeleted      Boolean   @default(false)
+  deletedAt      DateTime?
+  deletedBy      Int?
+
+  bankAccount  BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  beneficiary  Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+
+  @@id([bankAccountId, beneficiaryId]) // 複合主キー
+}
+
+// =========================================
+// 9. transfers
+// =========================================
+model Transfer {
+  id                        Int     @id @default(autoincrement())
+  transferType              String
+  donationRequestId         Int?
+  organizationBankAccountId Int?
+  beneficiaryId             Int?
+  transferDate              DateTime
+  amount                    Decimal
+  status                    PaymentStatus @default(PENDING)
+  entryMethod               String   @default("MANUAL")
+  scheduledDate             DateTime?
+  executedDate              DateTime?
+  bankTransactionId         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy Int?
+  updatedBy Int?
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy Int?
+
+  // Relations
+  donationRequest DonationRequest? @relation(fields: [donationRequestId], references: [id], onDelete: SetNull)
+  bankAccount     BankAccount?     @relation(name: "bank_account_transfers", fields: [organizationBankAccountId], references: [id], onDelete: SetNull)
+  beneficiary     Beneficiary?     @relation("beneficiary_transfers", fields: [beneficiaryId], references: [id], onDelete: SetNull)
+}
+
+// =========================================
+// 10. notifications
+// =========================================
+model Notification {
+  id               Int     @id @default(autoincrement())
+  organizationId   Int
+  receiverType     String
+  receiverId       Int
+  notificationType String
+  title            String?
+  message          String?
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  // Relation
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// =========================================
+// 11. audit_logs
+// =========================================
+model AuditLog {
+  id        Int     @id @default(autoincrement())
+  tableName String
+  recordId  Int
+  operation String
+  changedBy Int?
+  changedAt DateTime @default(now())
+  oldData   Json?
+  newData   Json?
+
+  // 変更者ユーザーと紐づけ
+  changedByUser User? @relation(fields: [changedBy], references: [id], onDelete: SetNull)
+}
+
+//
+// === チャットフォーム統合モデル ===
+//
+
+// チャットセッション
+model Chat {
+  id          String    @id @default(uuid())
+  createdAt   DateTime  @default(now())
+  title       String
+  userId      Int
+  visibility  String    @default("private")
+
+  // リレーション
+  user        User      @relation(fields: [userId], references: [id])
+  messages    Message[]
+  donationRequest DonationRequest?
+  chatContext ChatContext?
+  chatSession ChatSession?
+}
+
+// チャットメッセージ
+model Message {
+  id        String    @id @default(uuid())
+  chatId    String
+  role      String
+  content   Json
+  createdAt DateTime  @default(now())
+
+  // リレーション
+  chat      Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  votes     Vote[]
+}
+
+// メッセージ評価
+model Vote {
+  chatId     String
+  messageId  String
+  isUpvoted  Boolean
+
+  // リレーション
+  message    Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, messageId])
+}
+
+//
+// === チャットフォーム設定モデル ===
+//
+
+// チャットフォーム設定
+model ChatFormConfig {
+  id                String    @id @default(uuid())
+  organizationId    Int
+  formId            String    @unique // URLに使用するユニークID
+  title             String    // チャットフォームのタイトル
+  description       String?   // 説明
+  primaryColor      String?   // テーマカラー
+  logoUrl           String?   // ロゴURL
+  customCss         String?   @db.Text // カスタムCSS
+  isActive          Boolean   @default(true)
+
+  // フロー設定（寄付プロセスの流れ）
+  flow              Json?     // チャットフローの設定をJSON形式で保存
+
+  // 設定項目
+  allowAnonymous    Boolean   @default(true)
+  requireEmail      Boolean   @default(false)
+  showBeneficiaries Boolean   @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         Int?
+  updatedBy         Int?
+  isDeleted         Boolean   @default(false)
+  deletedAt         DateTime?
+  deletedBy         Int?
+
+  // Relations
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// =========================================
+// === NextAuth models ===
+// =========================================
+model Account {
+  id                Int     @id @default(autoincrement())
+  userId            Int
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           Int     @id @default(autoincrement())
+  userId       Int
+  sessionToken String  @unique
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  id         Int     @id @default(autoincrement())
+  identifier String
+  token      String  @unique
+  expires    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([identifier, token])
+}
+
+// =========================================
+// Chat-form related models (integrated from chat-form)
+// =========================================
+
+model ChatContext {
+  chatId      String   @id
+  contextData String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+}
+
+model ChatSession {
+  id            String    @id @default(uuid())
+  chatId        String    @unique
+  anonymousId   String?
+  recoveryToken String?   @unique
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  chat          Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+}
+
+model ChatFlowMaster {
+  id          Int      @id @default(autoincrement())
+  version     String   @unique
+  flow        Json
+  isActive    Boolean  @default(true)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   Int?
+  updatedBy   Int?
+}
+
+model TempTokenStore {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  email     String
+  userId    Int?
+  purpose   String   @default("auth") // auth, password_reset, etc.
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([email])
+  @@index([expiresAt])
+}
