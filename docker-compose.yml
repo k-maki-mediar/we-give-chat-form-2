@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  chat-form-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3103:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/we_give_db
+      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/we_give_db
+      - NEXT_PUBLIC_API_BASE_URL=http://admin-app:3000/api
+      - ADMIN_API_URL=http://admin-app:3000/api
+      - API_KEY=${API_KEY:-secure-api-key-for-chat-form-integration}
+      - AUTH_SECRET=${CHATFORM2_AUTH_SECRET:-SUPER_SECRET_VALUE}
+      - NEXTAUTH_SECRET=${CHATFORM2_NEXTAUTH_SECRET:-SUPER_SECRET_VALUE}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-your-openai-api-key}
+      - NEXT_PUBLIC_CHAT_FORM_URL=https://we-give-chat2.local:8088
+      - NEXTAUTH_URL=${NEXTAUTH_URL_CHAT2:-https://we-give-chat2.local:8088}
+      - NEXT_PUBLIC_WEB_APP_URL=https://we-give-web.local:8088
+      - WEB_APP_API_URL=http://web-app:3000
+      - LANGCHAIN_DEBUG=true
+      - LANGCHAIN_LOG_DIR=${LANGCHAIN_LOG_DIR:-/usr/src/app/logs/langchain}
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+      - /usr/src/app/.next
+    networks:
+      - we-give-system_app-network
+    command: sh -c "npm install --legacy-peer-deps && npx next dev"
+
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-we_give_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5532}:5432"
+    networks:
+      - we-give-system_app-network
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "${NGINX_PORT:-8089}:443"
+      - "8439:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - chat-form-2
+    networks:
+      - we-give-system_app-network
+
+volumes:
+  pgdata:
+
+networks:
+  we-give-system_app-network:
+    external: true
