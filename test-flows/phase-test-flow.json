@@ -1,0 +1,277 @@
+{
+  "version": "1.0.0",
+  "flow": {
+    "initialStep": "welcome",
+    "steps": {
+      "welcome": {
+        "type": "message",
+        "message": "フェーズ1-2の機能テストフローへようこそ！このフローでは実装済みの機能を確認します。",
+        "nextStep": "test_selection"
+      },
+      
+      "test_selection": {
+        "type": "button_select",
+        "message": "どの機能をテストしますか？",
+        "options": [
+          {
+            "value": "ui_factory",
+            "label": "UIファクトリーテスト",
+            "nextStep": "ui_factory_test"
+          },
+          {
+            "value": "validation",
+            "label": "バリデーションテスト",
+            "nextStep": "validation_test"
+          },
+          {
+            "value": "condition",
+            "label": "条件評価テスト",
+            "nextStep": "condition_test"
+          },
+          {
+            "value": "action",
+            "label": "アクション実行テスト",
+            "nextStep": "action_test"
+          },
+          {
+            "value": "dynamic_options",
+            "label": "動的オプションテスト",
+            "nextStep": "dynamic_options_test"
+          }
+        ]
+      },
+      
+      "ui_factory_test": {
+        "type": "message",
+        "message": "UIファクトリーテスト：様々なUIタイプを順番に表示します。",
+        "nextStep": "button_select_demo"
+      },
+      
+      "button_select_demo": {
+        "type": "button_select",
+        "message": "ボタン選択タイプです。選択してください：",
+        "options": [
+          {
+            "value": "yes",
+            "label": "はい",
+            "nextStep": "text_input_demo"
+          },
+          {
+            "value": "no",
+            "label": "いいえ",
+            "nextStep": "text_input_demo"
+          }
+        ]
+      },
+      
+      "text_input_demo": {
+        "type": "text_input",
+        "message": "テキスト入力タイプです。何か入力してください：",
+        "placeholder": "ここに入力...",
+        "nextStep": "amount_input_demo"
+      },
+      
+      "amount_input_demo": {
+        "type": "amount_input",
+        "message": "金額入力タイプです。金額を入力してください：",
+        "nextStep": "slider_select_demo"
+      },
+      
+      "slider_select_demo": {
+        "type": "slider_select",
+        "message": "スライダー選択タイプです。割合を選択してください：",
+        "options": {
+          "min": 0,
+          "max": 100,
+          "step": 10,
+          "leftLabel": "最小",
+          "rightLabel": "最大",
+          "defaultValue": 50
+        },
+        "nextStep": "ui_factory_complete"
+      },
+      
+      "ui_factory_complete": {
+        "type": "message",
+        "message": "UIファクトリーテスト完了！すべてのUIタイプが正常に動作しました。",
+        "nextStep": "test_selection"
+      },
+      
+      "validation_test": {
+        "type": "message",
+        "message": "バリデーションテスト：入力値の検証を確認します。",
+        "nextStep": "required_validation"
+      },
+      
+      "required_validation": {
+        "type": "text_input",
+        "message": "必須項目のテストです。何も入力せずに送信してみてください：",
+        "placeholder": "必須項目",
+        "validation": [
+          {
+            "type": "required",
+            "message": "この項目は必須です"
+          }
+        ],
+        "nextStep": "pattern_validation"
+      },
+      
+      "pattern_validation": {
+        "type": "text_input",
+        "message": "メールアドレスのパターンテストです：",
+        "placeholder": "example@email.com",
+        "validation": [
+          {
+            "type": "pattern",
+            "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+            "message": "有効なメールアドレスを入力してください"
+          }
+        ],
+        "nextStep": "length_validation"
+      },
+      
+      "length_validation": {
+        "type": "text_input",
+        "message": "文字数制限のテストです（3文字以上10文字以下）：",
+        "placeholder": "3-10文字で入力",
+        "validation": [
+          {
+            "type": "length",
+            "minLength": 3,
+            "maxLength": 10,
+            "message": "3文字以上10文字以下で入力してください"
+          }
+        ],
+        "nextStep": "expression_validation"
+      },
+      
+      "expression_validation": {
+        "type": "amount_input",
+        "message": "カスタム式のテストです（100以上の値を入力）：",
+        "validation": [
+          {
+            "type": "expression",
+            "expression": "currentValue >= 100",
+            "message": "100以上の値を入力してください"
+          }
+        ],
+        "nextStep": "validation_complete"
+      },
+      
+      "validation_complete": {
+        "type": "message",
+        "message": "バリデーションテスト完了！",
+        "nextStep": "test_selection"
+      },
+      
+      "condition_test": {
+        "type": "message",
+        "message": "条件評価テスト：入力に基づいて異なるパスに分岐します。",
+        "nextStep": "age_input"
+      },
+      
+      "age_input": {
+        "type": "amount_input",
+        "message": "年齢を入力してください：",
+        "conditions": [
+          {
+            "expression": "responses.age_input < 20",
+            "nextStep": "young_message"
+          },
+          {
+            "expression": "responses.age_input >= 20 && responses.age_input < 65",
+            "nextStep": "adult_message"
+          },
+          {
+            "expression": "responses.age_input >= 65",
+            "nextStep": "senior_message"
+          }
+        ],
+        "fallback": "invalid_age"
+      },
+      
+      "young_message": {
+        "type": "message",
+        "message": "20歳未満の方ですね！",
+        "nextStep": "condition_complete"
+      },
+      
+      "adult_message": {
+        "type": "message",
+        "message": "20歳以上65歳未満の方ですね！",
+        "nextStep": "condition_complete"
+      },
+      
+      "senior_message": {
+        "type": "message",
+        "message": "65歳以上の方ですね！",
+        "nextStep": "condition_complete"
+      },
+      
+      "invalid_age": {
+        "type": "message",
+        "message": "無効な年齢が入力されました。",
+        "nextStep": "condition_complete"
+      },
+      
+      "condition_complete": {
+        "type": "message",
+        "message": "条件評価テスト完了！",
+        "nextStep": "test_selection"
+      },
+      
+      "action_test": {
+        "type": "message",
+        "message": "アクション実行テスト：ローカルストレージへの保存を確認します。",
+        "nextStep": "save_data"
+      },
+      
+      "save_data": {
+        "type": "text_input",
+        "message": "保存するデータを入力してください：",
+        "placeholder": "保存するテキスト",
+        "action": {
+          "type": "storage",
+          "config": {
+            "action": "set",
+            "key": "test_data",
+            "value": "{{responses.save_data}}"
+          }
+        },
+        "nextStep": "action_complete"
+      },
+      
+      "action_complete": {
+        "type": "message",
+        "message": "アクションテスト完了！データがローカルストレージに保存されました。",
+        "nextStep": "test_selection"
+      },
+      
+      "dynamic_options_test": {
+        "type": "message",
+        "message": "動的オプションテスト：オプションが動的に生成されます。",
+        "nextStep": "prefecture_select"
+      },
+      
+      "prefecture_select": {
+        "type": "button_select",
+        "message": "都道府県を選択してください（動的生成）：",
+        "dynamicOptions": {
+          "source": "function",
+          "functionName": "prefectures",
+          "cache": {
+            "enabled": true,
+            "ttl": 300000
+          }
+        },
+        "nextStep": "dynamic_complete"
+      },
+      
+      "dynamic_complete": {
+        "type": "message",
+        "message": "動的オプションテスト完了！",
+        "nextStep": "test_selection"
+      }
+    }
+  }
+}

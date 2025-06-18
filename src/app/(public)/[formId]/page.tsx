@@ -1,24 +1,33 @@
-import { notFound } from "next/navigation";
-import { getFormContext } from "@/lib/data/getFormContext";
-import ChatEntry from "@/components/chat-entry";
+import { loadFlow } from "@/lib/data/loadFlow";
+import ChatWindow from "@/components/chat/ChatWindow";
 
-type Props = { params: { formId: string } };
-
-export default async function Page({ params }: Props) {
-    const ctx = await getFormContext(params.formId);
-
-    if (!ctx) notFound(); // 404 ページへ
-
-    return (
-        <ChatEntry
-            config={ctx.cfg}
-            flowDef={ctx.flowDef}
-            beneficiaries={ctx.beneficiaries}
-        />
-    );
+export default async function Page({ params }: { params: Promise<{ formId: string }> }) {
+    const { formId } = await params;
+    const flow = await loadFlow(formId);     // throws 404 if not found
+    return <ChatWindow flow={flow} />;
 }
 
-export const revalidate = 30; // 30 秒ごとに ISR
+// import { notFound } from "next/navigation";
+// import { getFormContext } from "@/lib/data/getFormContext";
+// import ChatEntry from "@/components/chat-entry";
+
+// type Props = { params: { formId: string } };
+
+// export default async function Page({ params }: Props) {
+//     const ctx = await getFormContext(params.formId);
+
+//     if (!ctx) notFound(); // 404 ページへ
+
+//     return (
+//         <ChatEntry
+//             config={ctx.cfg}
+//             flowDef={ctx.flowDef}
+//             beneficiaries={ctx.beneficiaries}
+//         />
+//     );
+// }
+
+// export const revalidate = 30; // 30 秒ごとに ISR
 
 // import { prisma } from "@/lib/prisma";
 // import ChatEntry from "@/components/chat-entry";

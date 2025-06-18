@@ -1,40 +1,27 @@
-import { createMachine } from 'xstate';
-import { z } from 'zod';
+import { createMachine } from "xstate";
+import { z } from "zod";
 
-// Õíüš©n¹­üŞŒgs0kš©	
-const FlowSchema = z.object({
-    version: z.string(),
-    flow: z.object({
-        initialStep: z.string(),
-        steps: z.record(z.any()),
-    }),
+const StepSchema = z.object({
+  id: z.string(),
+  type: z.enum(["MESSAGE", "INPUT_AMOUNT", "SELECT_BENEFICIARY", "CONFIRM"]),
+  next: z.string().optional(),
+  // è¿½åŠ ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰...
 });
 
-// Õíüš©’Ñü¹WfXStateŞ·ók	Û
-export function parseFlow(flowDef: unknown) {
-    // zodgĞêÇü·çó
-    const parsed = FlowSchema.parse(flowDef);
-    
-    // !Xj¹ÆüÈŞ·ó’ÔYŒgŸÅ’á5	
-    return createMachine({
-        id: 'chatFlow',
-        initial: parsed.flow.initialStep,
-        states: {
-            [parsed.flow.initialStep]: {
-                on: {
-                    NEXT: 'end',
-                },
-            },
-            end: {
-                type: 'final',
-            },
-        },
-    });
+export function buildMachine(def: any) {
+  const parsed = z.array(StepSchema).parse(def);
+  const states = Object.fromEntries(
+    parsed.map((s) => [
+      s.id,
+      {
+        on: { NEXT: s.next ?? "end" },
+        meta: { step: s },      // UI ãƒ¬ãƒ³ãƒ€ãƒªãƒ³ã‚°ã«ä½¿ã†
+      },
+    ]),
+  );
+  return createMachine({
+    id: "donationFlow",
+    initial: parsed[0].id,
+    states,
+  });
 }
-
-// Õíü¹ÆÃ×n‹š©Œgá5	
-export type FlowStep = {
-    message: string;
-    type: string;
-    nextStep?: string;
-};

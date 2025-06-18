@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "flow": {
+    "initialStep": "start",
+    "steps": {
+      "start": {
+        "type": "message",
+        "message": "シンプルなテストフローです。",
+        "nextStep": "name_input"
+      },
+      
+      "name_input": {
+        "type": "text_input",
+        "message": "お名前を教えてください：",
+        "placeholder": "山田太郎",
+        "validation": [
+          {
+            "type": "required",
+            "message": "名前は必須です"
+          }
+        ],
+        "nextStep": "greeting"
+      },
+      
+      "greeting": {
+        "type": "message",
+        "message": "こんにちは、{{responses.name_input}}さん！",
+        "nextStep": "continue_check"
+      },
+      
+      "continue_check": {
+        "type": "button_select",
+        "message": "続けますか？",
+        "options": [
+          {
+            "value": "yes",
+            "label": "はい",
+            "nextStep": "end_yes"
+          },
+          {
+            "value": "no",
+            "label": "いいえ",
+            "nextStep": "end_no"
+          }
+        ]
+      },
+      
+      "end_yes": {
+        "type": "message",
+        "message": "ありがとうございました！",
+        "isEnd": true
+      },
+      
+      "end_no": {
+        "type": "message",
+        "message": "またのご利用をお待ちしています。",
+        "isEnd": true
+      }
+    }
+  }
+}
